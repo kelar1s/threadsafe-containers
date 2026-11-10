@@ -60,8 +60,9 @@ void test_mutex_index_and_set() {
       th.join();
    }
 
+   const auto& const_vec = vec;
    for (int i = 0; i < count; ++i) {
-      assert(vec[i] == i + 15);
+      assert(const_vec[i] == i + 15);
    }
    std::cout << "    [SUCCESS]\n" << std::endl;
 }
@@ -94,6 +95,46 @@ void test_mutex_pop() {
 
    assert(vec.empty());
    std::cout << "    [SUCCES] total popped: " << total_popped << "\n"
+             << std::endl;
+}
+
+void test_mutex_size_empty() {
+   std::cout << "[Mutex Vector] TEST: concurrent size and empty" << std::endl;
+   ts::mutex_vector<int> vec;
+   const size_t max_ops = 15000;
+   std::atomic<bool> writer_done{false};
+   std::atomic<size_t> checks_count{0};
+
+   std::thread writer([&vec, max_ops, &writer_done]() {
+      for (size_t i = 0; i < max_ops; ++i) {
+         vec.push_back(static_cast<int>(i));
+         if (i % 3 == 0) {
+            vec.pop_back();
+         }
+      }
+      writer_done.store(true);
+   });
+
+   std::thread reader([&vec, max_ops, &writer_done, &checks_count]() {
+      while (!writer_done.load()) {
+         size_t sz = vec.size();
+         bool is_empty = vec.empty();
+         assert(sz <= max_ops);
+         if (is_empty) {
+            assert(vec.size() <= max_ops);
+         }
+         checks_count++;
+      }
+   });
+
+   writer.join();
+   reader.join();
+
+   const size_t expected_final_size = max_ops - (max_ops / 3);
+   assert(vec.size() == expected_final_size);
+   assert(!vec.empty());
+   std::cout << "    [SUCCESS] final size: " << vec.size()
+             << ", concurrent checks: " << checks_count << "\n"
              << std::endl;
 }
 
@@ -185,6 +226,46 @@ void test_lockfree_pop() {
              << std::endl;
 }
 
+void test_lockfree_size_empty() {
+   std::cout << "[LockFree Vector] TEST: size and empty" << std::endl;
+   ts::lockfree_vector<int> vec;
+   const size_t max_ops = 15000;
+   std::atomic<bool> writer_done{false};
+   std::atomic<size_t> checks_count{0};
+
+   std::thread writer([&vec, max_ops, &writer_done]() {
+      for (size_t i = 0; i < max_ops; ++i) {
+         vec.push_back(static_cast<int>(i));
+         if (i % 3 == 0) {
+            vec.pop_back();
+         }
+      }
+      writer_done.store(true);
+   });
+
+   std::thread reader([&vec, max_ops, &writer_done, &checks_count]() {
+      while (!writer_done.load()) {
+         size_t sz = vec.size();
+         bool is_empty = vec.empty();
+         assert(sz <= max_ops);
+         if (is_empty) {
+            assert(vec.size() <= max_ops);
+         }
+         checks_count++;
+      }
+   });
+
+   writer.join();
+   reader.join();
+
+   const size_t expected_final_size = max_ops - (max_ops / 3);
+   assert(vec.size() == expected_final_size);
+   assert(!vec.empty());
+   std::cout << "    [SUCCESS] final size: " << vec.size()
+             << ", concurrent checks: " << checks_count << "\n"
+             << std::endl;
+}
+
 template <typename VectorType>
 double measure_performance(int num_threads, int total_elements) {
    VectorType vec;
@@ -263,10 +344,12 @@ int main() {
    test_mutex_push();
    test_mutex_index_and_set();
    test_mutex_pop();
+   test_mutex_size_empty();
 
    test_lockfree_push();
    test_lockfree_index_and_set();
    test_lockfree_pop();
+   test_lockfree_size_empty();
 
    run_benchmarks();
 
