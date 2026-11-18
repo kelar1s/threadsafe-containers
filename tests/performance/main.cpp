@@ -10,15 +10,15 @@
 #include "workloads/vector_bench.hpp"
 
 int main() {
-   bench::run_comparison_table("Vector",
-                               perf::vector_workload<ts::mutex_vector<int>>,
-                               perf::vector_workload<ts::lockfree_vector<int>>);
+  bench::run_comparison_table("Vector",
+                              perf::vector_workload<ts::mutex_vector<int>>,
+                              perf::vector_workload<ts::lockfree_vector<int>>);
 
-   bench::run_comparison_table(
-       "ForwardList", perf::forward_list_workload<ts::mutex_forward_list<int>>,
-       perf::forward_list_workload<ts::lockfree_forward_list<int>>);
+  bench::run_comparison_table(
+      "ForwardList", perf::forward_list_workload<ts::mutex_forward_list<int>>,
+      perf::forward_list_workload<ts::lockfree_forward_list<int>>);
 
-   bench::run_comparison_table("List", perf::list_workload<ts::mutex_list<int>>,
-                               perf::list_workload<ts::lockfree_list<int>>);
-   return 0;
+  bench::run_comparison_table("List", perf::list_workload<ts::mutex_list<int>>,
+                              perf::list_workload<ts::lockfree_list<int>>);
+  return 0;
 }
