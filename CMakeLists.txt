@@ -3,7 +3,6 @@ project(threadsafe_containers LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(ENABLE_TSAN "Enable ThreadSanitizer" OFF)
@@ -21,9 +20,6 @@ target_include_directories(ts_containers INTERFACE
 )
 target_link_libraries(ts_containers INTERFACE Threads::Threads)
 
-add_executable(threadsafe_containers src/main.cpp)
-target_link_libraries(threadsafe_containers PRIVATE ts_containers)
-
 include(FetchContent)
 FetchContent_Declare(
     googletest
@@ -38,9 +34,12 @@ include(GoogleTest)
 enable_testing()
 
 add_executable(ts_tests
-    tests/test_mutex_vector.cpp
-    tests/test_lockfree_vector.cpp
-    tests/test_lockfree_forward_list.cpp
+    tests/functional/test_mutex_vector.cpp
+    tests/functional/test_lockfree_vector.cpp
+    tests/functional/test_lockfree_forward_list.cpp
+    tests/functional/test_mutex_forward_list.cpp
+    tests/functional/test_mutex_list.cpp
+    tests/functional/test_lockfree_list.cpp
 )
 target_link_libraries(ts_tests PRIVATE ts_containers GTest::gtest_main)
 
@@ -48,3 +47,18 @@ gtest_discover_tests(ts_tests
     PROPERTIES TIMEOUT 300
     DISCOVERY_TIMEOUT 60
 )
+
+add_executable(performance_benchmarks
+    tests/performance/main.cpp
+)
+target_include_directories(performance_benchmarks PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/performance
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/performance/utils
+)
+target_link_libraries(performance_benchmarks PRIVATE ts_containers)
+
+if(NOT ENABLE_TSAN)
+    target_compile_options(performance_benchmarks PRIVATE
+        $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3>
+    )
+endif()
