@@ -32,7 +32,7 @@ double list_workload(int num_threads, int total_elements) {
 
   assert(lst.size() == static_cast<size_t>(total_elements));
 
-  int searches_per_thread = 60 / num_threads;
+  int searches_per_thread = 144 / num_threads;
   threads.clear();
   for (int t = 0; t < num_threads; ++t) {
     int end_val = (t == num_threads - 1) ? total_elements : (t + 1) * chunk;
