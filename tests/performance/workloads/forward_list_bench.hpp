@@ -29,12 +29,13 @@ double forward_list_workload(int num_threads, int total_elements) {
 
    assert(flist.size() == static_cast<size_t>(total_elements));
 
+   int searches_per_thread = 60 / num_threads;
    threads.clear();
    for (int t = 0; t < num_threads; ++t) {
-      int base = t * chunk;
-      threads.emplace_back([&flist, base]() {
-         for (int i = 0; i < 50; ++i) {
-            bool found = flist.contains(base + i);
+      int end_val = (t == num_threads - 1) ? total_elements : (t + 1) * chunk;
+      threads.emplace_back([&flist, end_val, searches_per_thread]() {
+         for (int i = 0; i < searches_per_thread; ++i) {
+            bool found = flist.contains(end_val - 1 - i);
             assert(found);
          }
       });

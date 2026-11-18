@@ -44,7 +44,7 @@ TEST(LockfreeVector, ConcurrentIndexSetGet) {
    for (auto& th : threads) th.join();
 
    for (int i = 0; i < kCount; ++i) {
-      EXPECT_EQ(vec[i], i + 15) << "index = " << i;
+      EXPECT_EQ(vec[i], i + 15);
    }
 }
 

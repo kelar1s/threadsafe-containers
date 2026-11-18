@@ -57,7 +57,6 @@ TEST(LockfreeForwardList, ConcurrentPopFront) {
 
    EXPECT_TRUE(flist.empty());
    EXPECT_FALSE(flist.contains(0));
-   std::cout << "[info] total_popped = " << total_popped.load() << '\n';
 }
 
 TEST(LockfreeForwardList, ConcurrentSize) {

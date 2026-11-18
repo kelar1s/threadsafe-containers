@@ -26,9 +26,9 @@ class lockfree_list {
       Node* old_alloc = allocated_head_.load(std::memory_order_relaxed);
       while (true) {
          node->alloc_next = old_alloc;
-         if (allocated_head_.compare_exchange_weak(old_alloc, node,
-                                                   std::memory_order_release,
-                                                   std::memory_order_relaxed)) {
+         if (allocated_head_.compare_exchange_weak(
+                 old_alloc, node, std::memory_order_release,
+                 std::memory_order_relaxed)) {
             break;
          }
       }
@@ -39,8 +39,39 @@ class lockfree_list {
       Node* prev = curr->prev.load(std::memory_order_acquire);
       Node* next = curr->next.load(std::memory_order_acquire);
       if (prev != nullptr && next != nullptr) {
-         prev->next.store(next, std::memory_order_release);
-         next->prev.store(prev, std::memory_order_release);
+         Node* expected_next = curr;
+         prev->next.compare_exchange_strong(expected_next, next,
+                                            std::memory_order_release,
+                                            std::memory_order_relaxed);
+
+         Node* expected_prev = curr;
+         next->prev.compare_exchange_strong(expected_prev, prev,
+                                            std::memory_order_release,
+                                            std::memory_order_relaxed);
+      }
+   }
+
+   void clean_head() {
+      Node* curr = head_.load(std::memory_order_acquire);
+      while (curr != nullptr && curr->deleted.load(std::memory_order_acquire)) {
+         if (curr == tail_.load(std::memory_order_acquire)) break;
+         Node* n = curr->next.load(std::memory_order_acquire);
+         if (n == nullptr) break;
+         head_.compare_exchange_weak(curr, n, std::memory_order_release,
+                                     std::memory_order_relaxed);
+         curr = head_.load(std::memory_order_acquire);
+      }
+   }
+
+   void clean_tail() {
+      Node* curr = tail_.load(std::memory_order_acquire);
+      while (curr != nullptr && curr->deleted.load(std::memory_order_acquire)) {
+         if (curr == head_.load(std::memory_order_acquire)) break;
+         Node* p = curr->prev.load(std::memory_order_acquire);
+         if (p == nullptr) break;
+         tail_.compare_exchange_weak(curr, p, std::memory_order_release,
+                                     std::memory_order_relaxed);
+         curr = tail_.load(std::memory_order_acquire);
       }
    }
 
@@ -68,16 +99,16 @@ class lockfree_list {
       Node* new_node = allocate_node(value);
       while (true) {
          Node* first = head_.load(std::memory_order_acquire);
-         Node* prev = first->prev.load(std::memory_order_acquire);
+         Node* p = first->prev.load(std::memory_order_acquire);
 
-         if (prev != nullptr) {
-            head_.compare_exchange_weak(first, prev, std::memory_order_release,
+         if (p != nullptr && !p->deleted.load(std::memory_order_acquire)) {
+            head_.compare_exchange_weak(first, p, std::memory_order_release,
                                         std::memory_order_relaxed);
             continue;
          }
 
          new_node->next.store(first, std::memory_order_relaxed);
-         if (first->prev.compare_exchange_weak(prev, new_node,
+         if (first->prev.compare_exchange_weak(p, new_node,
                                                std::memory_order_release,
                                                std::memory_order_relaxed)) {
             head_.compare_exchange_strong(first, new_node,
@@ -93,16 +124,16 @@ class lockfree_list {
       Node* new_node = allocate_node(value);
       while (true) {
          Node* last = tail_.load(std::memory_order_acquire);
-         Node* next = last->next.load(std::memory_order_acquire);
+         Node* n = last->next.load(std::memory_order_acquire);
 
-         if (next != nullptr) {
-            tail_.compare_exchange_weak(last, next, std::memory_order_release,
+         if (n != nullptr && !n->deleted.load(std::memory_order_acquire)) {
+            tail_.compare_exchange_weak(last, n, std::memory_order_release,
                                         std::memory_order_relaxed);
             continue;
          }
 
          new_node->prev.store(last, std::memory_order_relaxed);
-         if (last->next.compare_exchange_weak(next, new_node,
+         if (last->next.compare_exchange_weak(n, new_node,
                                               std::memory_order_release,
                                               std::memory_order_relaxed)) {
             tail_.compare_exchange_strong(last, new_node,
@@ -117,46 +148,58 @@ class lockfree_list {
    void pop_front() {
       Node* curr = head_.load(std::memory_order_acquire);
       while (curr != nullptr) {
+         Node* next = curr->next.load(std::memory_order_acquire);
          if (!curr->deleted.load(std::memory_order_acquire)) {
             bool expected = false;
             if (curr->deleted.compare_exchange_strong(
                     expected, true, std::memory_order_acq_rel,
                     std::memory_order_relaxed)) {
                size_.fetch_sub(1, std::memory_order_relaxed);
-               unlink_deleted(curr);
+               if (next != nullptr) {
+                  head_.compare_exchange_weak(curr, next,
+                                              std::memory_order_release,
+                                              std::memory_order_relaxed);
+               }
                return;
             }
-         } else {
-            unlink_deleted(curr);
          }
-         curr = curr->next.load(std::memory_order_acquire);
+         if (next == nullptr || curr == tail_.load(std::memory_order_acquire)) return;
+         head_.compare_exchange_weak(curr, next, std::memory_order_release,
+                                     std::memory_order_relaxed);
+         curr = next;
       }
    }
 
    void pop_back() {
       Node* curr = tail_.load(std::memory_order_acquire);
       while (curr != nullptr) {
+         Node* prev = curr->prev.load(std::memory_order_acquire);
          if (!curr->deleted.load(std::memory_order_acquire)) {
             bool expected = false;
             if (curr->deleted.compare_exchange_strong(
                     expected, true, std::memory_order_acq_rel,
                     std::memory_order_relaxed)) {
                size_.fetch_sub(1, std::memory_order_relaxed);
-               unlink_deleted(curr);
+               if (prev != nullptr) {
+                  tail_.compare_exchange_weak(curr, prev,
+                                              std::memory_order_release,
+                                              std::memory_order_relaxed);
+               }
                return;
             }
-         } else {
-            unlink_deleted(curr);
          }
-         curr = curr->prev.load(std::memory_order_acquire);
+         if (prev == nullptr || curr == head_.load(std::memory_order_acquire)) return;
+         tail_.compare_exchange_weak(curr, prev, std::memory_order_release,
+                                     std::memory_order_relaxed);
+         curr = prev;
       }
    }
 
    void remove(const T& value) {
+      clean_head();
       Node* curr = head_.load(std::memory_order_acquire);
       while (curr != nullptr) {
          bool is_deleted = curr->deleted.load(std::memory_order_acquire);
-
          if (!is_deleted && curr->data == value) {
             bool expected = false;
             if (curr->deleted.compare_exchange_strong(
@@ -168,17 +211,17 @@ class lockfree_list {
          } else if (is_deleted) {
             unlink_deleted(curr);
          }
-
          curr = curr->next.load(std::memory_order_acquire);
       }
+      clean_head();
+      clean_tail();
    }
 
    bool contains(const T& value) const {
       Node* curr = head_.load(std::memory_order_acquire);
       while (curr != nullptr) {
-         if (!curr->deleted.load(std::memory_order_acquire) &&
-             curr->data == value) {
-            return true;
+         if (!curr->deleted.load(std::memory_order_acquire)) {
+            if (curr->data == value) return true;
          }
          curr = curr->next.load(std::memory_order_acquire);
       }
@@ -190,9 +233,11 @@ class lockfree_list {
    bool empty() const { return size() == 0; }
 
    void clear() {
-      while (!empty()) {
-         pop_front();
-      }
+      Node* dummy = allocate_node(T{});
+      dummy->deleted.store(true, std::memory_order_relaxed);
+      head_.store(dummy, std::memory_order_release);
+      tail_.store(dummy, std::memory_order_release);
+      size_.store(0, std::memory_order_relaxed);
    }
 };
 
