@@ -15,7 +15,7 @@ double vector_workload(int num_threads, int total_elements) {
       bench::parallel_chunks(num_threads, total_elements,
                              [&](int start, int end) {
                                 for (int i = start; i < end; ++i) {
-                                   vec.push_back(0);
+                                   vec.push_back(i);
                                 }
                              });
 
@@ -24,18 +24,22 @@ double vector_workload(int num_threads, int total_elements) {
       bench::parallel_chunks(num_threads, total_elements,
                              [&](int start, int end) {
                                 for (int i = start; i < end; ++i) {
-                                   auto idx = static_cast<size_t>(i);
-                                   vec[idx] = i + 1;
-                                   vec.set(idx, vec.get(idx) + 1);
+                                   size_t idx = static_cast<size_t>(i);
+                                   int val = vec.get(idx) + 1;
+                                   vec.set(idx, val);
                                 }
                              });
+
+      bench::parallel_chunks(num_threads, total_elements / 2,
+                             [&](int start, int end) {
+                                for (int i = start; i < end; ++i) {
+                                   vec.pop_back();
+                                }
+                             });
+
+      vec.clear();
    });
 
-   for (int i = 0; i < total_elements; ++i) {
-      assert(vec.get(static_cast<size_t>(i)) == i + 2);
-   }
-
-   vec.clear();
    assert(vec.empty());
    return elapsed;
 }

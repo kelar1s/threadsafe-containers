@@ -53,7 +53,7 @@ struct ListContainsRun {
    template <typename ListType>
    double operator()(const ListType& lst, int num_threads,
                      int total_elements) const {
-      constexpr int kTotalSearches = 60;
+      const int kTotalSearches = 60;
       int step = total_elements / kTotalSearches;
 
       return bench::measure_ms([&]() {
@@ -115,7 +115,7 @@ double list_remove(int num_threads, int total_elements) {
       lst.push_back(i);
    }
 
-   constexpr int kTotalRemovals = 60;
+   const int kTotalRemovals = 60;
    int step = total_elements / kTotalRemovals;
 
    double elapsed = bench::measure_ms([&]() {

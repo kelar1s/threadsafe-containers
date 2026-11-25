@@ -36,7 +36,7 @@ struct ForwardListContainsRun {
    template <typename ListType>
    double operator()(const ListType& flist, int num_threads,
                      int total_elements) const {
-      constexpr int kTotalSearches = 60;
+      const int kTotalSearches = 60;
       int step = total_elements / kTotalSearches;
 
       return bench::measure_ms([&]() {

@@ -42,10 +42,6 @@ inline double measure_mean(const WorkloadFn& single_run, int num_threads,
       times[i] = single_run(num_threads, total_elements);
    }
 
-   if (num_runs <= 1) {
-      return times[0];
-   }
-
    std::sort(times.begin(), times.end());
 
    double sum = 0.0;
